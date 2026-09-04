@@ -294,6 +294,44 @@ def sync_rds_instance(client, instance_id, ips, whitelist_name, keep_history=Fal
     client.modify_security_ips(request)
 
 
+def notify_feishu_ip_change(webhook_url, old_ips, new_ips):
+    response = requests.post(
+        webhook_url,
+        json={
+            "msg_type": "interactive",
+            "card": {
+                "header": {
+                    "title": {"tag": "plain_text", "content": "本地公网 IP 已变更"},
+                    "template": "orange",
+                },
+                "elements": [
+                    {
+                        "tag": "div",
+                        "fields": [
+                            {
+                                "is_short": False,
+                                "text": {
+                                    "tag": "lark_md",
+                                    "content": f"**原地址：**{old_ips or '无缓存'}",
+                                },
+                            },
+                            {
+                                "is_short": False,
+                                "text": {
+                                    "tag": "lark_md",
+                                    "content": f"**新地址：**{new_ips}",
+                                },
+                            },
+                        ],
+                    }
+                ],
+            },
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+
+
 def sync_once(keep_history=False):
     allowed_country = os.getenv("IP_ALLOWED_COUNTRY", "").strip()
     allowed_region = os.getenv("IP_ALLOWED_REGION", "").strip()
@@ -322,9 +360,11 @@ def sync_once(keep_history=False):
     cache_file = os.getenv("IP_CACHE_FILE", ".last_ip")
     if not os.path.isabs(cache_file):
         cache_file = os.path.join(PROJECT_DIR, cache_file)
+    old_ips = ""
     if os.path.exists(cache_file):
         with open(cache_file, "r", encoding="utf-8") as file:
-            if file.read().strip() == cached_ips:
+            old_ips = file.read().strip()
+            if old_ips == cached_ips:
                 print("IP 未变化，跳过同步")
                 return
 
@@ -398,6 +438,10 @@ def sync_once(keep_history=False):
         raise RuntimeError(f"本轮有 {len(failures)} 个目标同步失败，未更新 IP 缓存")
     if not target_count:
         raise RuntimeError("没有配置任何安全组或 RDS 实例")
+    webhook_url = os.getenv("FEISHU_WEBHOOK_URL", "").strip()
+    if webhook_url:
+        notify_feishu_ip_change(webhook_url, old_ips, cached_ips)
+        print("已发送飞书 IP 变更通知")
     with open(cache_file, "w", encoding="utf-8") as file:
         file.write(cached_ips)
 

@@ -62,12 +62,14 @@ IP_ALLOWED_REGION=Guizhou
 CHECK_INTERVAL_SECONDS=600
 IPINFO_TOKEN=
 IP_CACHE_FILE=.last_ip
+FEISHU_WEBHOOK_URL=
 ```
 
 - `SECURITY_GROUPS` 格式为 `地域ID:安全组ID`，多个目标用英文逗号分隔。
 - `RDS_INSTANCES` 填写实例 ID，多个目标用英文逗号分隔。
 - 两项地域配置可分别留空；都为空或不存在时不限制地域。
 - 不使用某类目标时，将对应配置留空。
+- 配置 `FEISHU_WEBHOOK_URL` 后，本地公网 IP 变更并成功同步时会发送飞书群机器人通知。
 
 ## 同步规则
 
