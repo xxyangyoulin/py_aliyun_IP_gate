@@ -92,6 +92,13 @@ python main.py --once
 python main.py
 ```
 
+保留 ECS 和 RDS 中的历史 IP，只新增不删除：
+
+```bash
+python main.py --once --keep-history
+python main.py --keep-history
+```
+
 程序按 `CHECK_INTERVAL_SECONDS` 定时检查。只有全部目标同步成功后才更新 `.last_ip`；新增目标或修改配置后，可删除 `.last_ip` 再执行一次。
 
 不要提交 `.env` 或泄露 AccessKey。建议使用专用 RAM 用户。

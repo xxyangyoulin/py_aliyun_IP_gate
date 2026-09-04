@@ -84,7 +84,9 @@ def get_public_ips(check_location=True):
     return locations
 
 
-def sync_ecs_group(client, region_id, security_group_id, ips, description_prefix):
+def sync_ecs_group(
+    client, region_id, security_group_id, ips, description_prefix, keep_history=False
+):
     rules = []
     next_token = None
     while True:
@@ -227,6 +229,22 @@ def sync_ecs_group(client, region_id, security_group_id, ips, description_prefix
             )
             client.authorize_security_group(request)
 
+        if keep_history:
+            existing_ips = {rule_ip(rule) for rule in all_group_rules}
+            used_numbers = set(numbered)
+            if templates:
+                used_numbers.add(1)
+            next_number = 1
+            for ip in ips:
+                if ip in existing_ips:
+                    continue
+                while next_number in used_numbers:
+                    next_number += 1
+                authorize(next_number, ip)
+                used_numbers.add(next_number)
+                existing_ips.add(ip)
+            continue
+
         for number, ip in pending:
             if not any(rule_ip(rule) == ip for rule in obsolete_rules):
                 authorize(number, ip)
@@ -246,7 +264,7 @@ def sync_ecs_group(client, region_id, security_group_id, ips, description_prefix
         revoke([rule.security_group_rule_id for rule in obsolete_rules])
 
 
-def sync_rds_instance(client, instance_id, ips, whitelist_name):
+def sync_rds_instance(client, instance_id, ips, whitelist_name, keep_history=False):
     request = rds_models.DescribeDBInstanceIPArrayListRequest(dbinstance_id=instance_id)
     body = client.describe_dbinstance_iparray_list(request).body
     groups = body.items.dbinstance_iparray if body.items else []
@@ -254,9 +272,17 @@ def sync_rds_instance(client, instance_id, ips, whitelist_name):
         (item for item in groups if item.dbinstance_iparray_name == whitelist_name),
         None,
     )
-    security_ips = ",".join(ips)
-    if group and set(group.security_iplist.split(",")) == set(ips):
+    current_ips = {
+        ip.strip()
+        for ip in (group.security_iplist.split(",") if group else [])
+        if ip.strip()
+    }
+    target_ips = set(ips)
+    if keep_history:
+        target_ips.update(current_ips)
+    if current_ips == target_ips:
         return
+    security_ips = ",".join(sorted(target_ips))
 
     request = rds_models.ModifySecurityIpsRequest(
         dbinstance_id=instance_id,
@@ -268,7 +294,7 @@ def sync_rds_instance(client, instance_id, ips, whitelist_name):
     client.modify_security_ips(request)
 
 
-def sync_once():
+def sync_once(keep_history=False):
     allowed_country = os.getenv("IP_ALLOWED_COUNTRY", "").strip()
     allowed_region = os.getenv("IP_ALLOWED_REGION", "").strip()
     check_location = bool(allowed_country or allowed_region)
@@ -336,7 +362,12 @@ def sync_once():
                 )
                 config.endpoint = f"ecs.{region_id}.aliyuncs.com"
                 sync_ecs_group(
-                    EcsClient(config), region_id, security_group_id, ips, description
+                    EcsClient(config),
+                    region_id,
+                    security_group_id,
+                    ips,
+                    description,
+                    keep_history,
                 )
                 print(f"已同步安全组: {account_name}/{region_id}/{security_group_id}")
             except Exception as error:
@@ -355,7 +386,9 @@ def sync_once():
                 continue
             target_count += 1
             try:
-                sync_rds_instance(rds_client, instance_id, ips, whitelist_name)
+                sync_rds_instance(
+                    rds_client, instance_id, ips, whitelist_name, keep_history
+                )
                 print(f"已同步 RDS 白名单: {account_name}/{instance_id}/{whitelist_name}")
             except Exception as error:
                 failures.append(f"RDS {account_name}/{instance_id}: {error}")
@@ -372,13 +405,18 @@ def sync_once():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="执行一次后退出")
+    parser.add_argument(
+        "--keep-history",
+        action="store_true",
+        help="保留 ECS 和 RDS 中的历史 IP，只新增不删除",
+    )
     args = parser.parse_args()
     load_dotenv(os.path.join(PROJECT_DIR, ".env"))
     interval = int(os.getenv("CHECK_INTERVAL_SECONDS", "600"))
 
     while True:
         try:
-            sync_once()
+            sync_once(args.keep_history)
         except Exception as error:
             print(f"同步失败: {error}")
         if args.once:
