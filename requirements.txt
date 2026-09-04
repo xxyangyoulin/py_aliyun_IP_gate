@@ -1,0 +1,4 @@
+alibabacloud-ecs20140526
+alibabacloud-rds20140815
+python-dotenv
+requests
