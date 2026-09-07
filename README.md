@@ -101,6 +101,18 @@ python main.py --once --keep-history
 python main.py --keep-history
 ```
 
+额外同步指定 IPv4 地址：
+
+```bash
+python main.py --additional-ips 203.0.113.10,203.0.113.11
+```
+
+显式传入的地址会保存到 `.additional_ips`，以后启动时无需再次传入参数。需要清空时执行：
+
+```bash
+python main.py --once --additional-ips ""
+```
+
 程序按 `CHECK_INTERVAL_SECONDS` 定时检查。只有全部目标同步成功后才更新 `.last_ip`；新增目标或修改配置后，可删除 `.last_ip` 再执行一次。
 
 不要提交 `.env` 或泄露 AccessKey。建议使用专用 RAM 用户。

@@ -332,6 +332,21 @@ def notify_feishu_ip_change(webhook_url, old_ips, new_ips):
     response.raise_for_status()
 
 
+def parse_additional_ips(value):
+    additional_ips = []
+    for item in value.split(","):
+        if not item.strip():
+            continue
+        try:
+            ip = ipaddress.ip_address(item.strip())
+        except ValueError as error:
+            raise ValueError(f"额外 IP 不是有效 IPv4 地址: {item.strip()}") from error
+        if ip.version != 4:
+            raise ValueError(f"额外 IP 不是 IPv4 地址: {item.strip()}")
+        additional_ips.append(str(ip))
+    return sorted(set(additional_ips))
+
+
 def sync_once(keep_history=False):
     allowed_country = os.getenv("IP_ALLOWED_COUNTRY", "").strip()
     allowed_region = os.getenv("IP_ALLOWED_REGION", "").strip()
@@ -354,7 +369,12 @@ def sync_once(keep_history=False):
                 f"{allowed_country or '*'}/{allowed_region or '*'}，跳过同步"
             )
             return
-    ips = [ip for ip, _, _ in locations]
+    additional_ips = []
+    additional_ips_file = os.path.join(PROJECT_DIR, ".additional_ips")
+    if os.path.exists(additional_ips_file):
+        with open(additional_ips_file, "r", encoding="utf-8") as file:
+            additional_ips = parse_additional_ips(file.read().strip())
+    ips = sorted({ip for ip, _, _ in locations}.union(additional_ips))
     cached_ips = ",".join(ips)
 
     cache_file = os.getenv("IP_CACHE_FILE", ".last_ip")
@@ -454,7 +474,21 @@ def main():
         action="store_true",
         help="保留 ECS 和 RDS 中的历史 IP，只新增不删除",
     )
+    parser.add_argument(
+        "--additional-ips",
+        help="保存并同步额外的 IPv4 地址，多个地址用英文逗号分隔",
+    )
     args = parser.parse_args()
+    additional_ips_file = os.path.join(PROJECT_DIR, ".additional_ips")
+    if args.additional_ips is not None:
+        try:
+            additional_ips = parse_additional_ips(args.additional_ips)
+        except ValueError as error:
+            parser.error(str(error))
+        with open(additional_ips_file, "w", encoding="utf-8") as file:
+            file.write(",".join(additional_ips))
+        print(f"已保存额外 IP: {','.join(additional_ips) or '无'}")
+
     load_dotenv(os.path.join(PROJECT_DIR, ".env"))
     interval = int(os.getenv("CHECK_INTERVAL_SECONDS", "600"))
 
