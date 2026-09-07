@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Aliyun IP Gate{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">Aliyun IP Gate</a>
+    {% if request.url.path != '/login' %}
+    <nav>
+      <a href="/">状态</a>
+      <a href="/settings">设置</a>
+      <a href="/accounts">阿里云账号</a>
+      <a href="/additional-ips">附加 IP</a>
+      <a href="/runs">同步记录</a>
+      <form class="logout" method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit">退出</button>
+      </form>
+    </nav>
+    {% endif %}
+  </header>
+  <main>
+    {% if flash %}<div class="notice">{{ flash }}</div>{% endif %}
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

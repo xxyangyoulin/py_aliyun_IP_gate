@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}编辑账号{% else %}添加账号{% endif %} · Aliyun IP Gate{% endblock %}
+{% block content %}
+<h1>{% if is_edit %}编辑账号{% else %}添加账号{% endif %}</h1>
+<form class="panel form" method="post" action="/accounts/save">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="account_id" value="{{ account.id if account else '' }}">
+  <div class="grid two">
+    <label>账号名称
+      <input name="name" value="{{ account.name if account else '' }}" required>
+    </label>
+    <label>AccessKey ID
+      <input name="access_key_id" value="{{ account.access_key_id if account else '' }}" required autocomplete="off">
+    </label>
+  </div>
+  <label>AccessKey Secret
+    <input type="password" name="access_key_secret" placeholder="{% if is_edit %}已配置；留空保持不变{% else %}请输入 AccessKey Secret{% endif %}" {% if not is_edit %}required{% endif %} autocomplete="new-password">
+  </label>
+  <label>ECS 安全组
+    <textarea name="security_groups" rows="5" placeholder="每行一个：cn-chengdu:sg-example">{% if account %}{% for target in account.security_groups %}{% if target is string %}{{ target }}{% else %}{{ target[0] }}:{{ target[1] }}{% endif %}{% if not loop.last %}
+{% endif %}{% endfor %}{% endif %}</textarea>
+  </label>
+  <label>RDS 实例
+    <textarea name="rds_instances" rows="4" placeholder="每行一个实例 ID">{% if account %}{% for target in account.rds_instances %}{{ target }}{% if not loop.last %}
+{% endif %}{% endfor %}{% endif %}</textarea>
+  </label>
+  <div class="actions"><a href="/accounts">取消</a><button type="submit">保存账号</button></div>
+</form>
+{% endblock %}

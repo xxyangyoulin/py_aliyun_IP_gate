@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}阿里云账号 · Aliyun IP Gate{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><h1>阿里云账号</h1><p>管理账号凭证以及关联的 ECS 和 RDS 目标。</p></div>
+  <a class="button" href="/accounts/new">添加账号</a>
+</div>
+<section class="panel">
+  {% if accounts %}
+  <table>
+    <thead><tr><th>名称</th><th>AccessKey ID</th><th>ECS</th><th>RDS</th><th></th></tr></thead>
+    <tbody>
+      {% for account in accounts %}
+      <tr>
+        <td><strong>{{ account.name }}</strong></td>
+        <td>{{ mask_secret(account.access_key_id) }}</td>
+        <td>{{ account.security_groups|length }}</td>
+        <td>{{ account.rds_instances|length }}</td>
+        <td class="row-actions">
+          <a href="/accounts/{{ account.id }}/edit">编辑</a>
+          <form method="post" action="/accounts/{{ account.id }}/delete" onsubmit="return confirm('确认删除该账号及其所有目标？')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="link danger" type="submit">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">尚未配置阿里云账号。</div>{% endif %}
+</section>
+{% endblock %}

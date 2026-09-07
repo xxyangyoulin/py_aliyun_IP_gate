@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}附加 IP · Aliyun IP Gate{% endblock %}
+{% block content %}
+<h1>附加 IP</h1>
+<form class="panel form" method="post" action="/additional-ips">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>额外同步的 IPv4 地址
+    <textarea name="additional_ips" rows="10" placeholder="每行一个 IPv4 地址">{% for ip in additional_ips %}{{ ip }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea>
+  </label>
+  <p class="hint">保存后，下一轮同步会自动将这些地址加入所有 ECS 安全组和 RDS 白名单。</p>
+  <div class="actions"><button type="submit">保存附加 IP</button></div>
+</form>
+{% endblock %}

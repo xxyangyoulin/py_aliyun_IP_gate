@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}基础设置 · Aliyun IP Gate{% endblock %}
+{% block content %}
+<h1>基础设置</h1>
+<form class="panel form" method="post" action="/settings">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid two">
+    <label>检查间隔（秒）
+      <input type="number" min="1" name="check_interval_seconds" value="{{ settings.check_interval_seconds }}" required>
+    </label>
+    <label>ECS 规则描述前缀
+      <input name="ecs_rule_description" value="{{ settings.ecs_rule_description }}" required>
+    </label>
+    <label>允许国家
+      <input name="allowed_country" value="{{ settings.allowed_country }}" placeholder="留空表示不限制">
+    </label>
+    <label>允许省份
+      <input name="allowed_region" value="{{ settings.allowed_region }}" placeholder="留空表示不限制">
+    </label>
+    <label>RDS 白名单名称
+      <input name="rds_whitelist_name" value="{{ settings.rds_whitelist_name }}" required>
+    </label>
+    <label>IPInfo Token
+      <input type="password" name="ipinfo_token" placeholder="{{ mask_secret(settings.ipinfo_token) }}；留空保持不变">
+      <span class="check"><input type="checkbox" name="clear_ipinfo_token"> 清空 Token</span>
+    </label>
+  </div>
+  <label>飞书 Webhook
+    <input type="password" name="feishu_webhook_url" placeholder="{{ mask_secret(settings.feishu_webhook_url) }}；留空保持不变">
+    <span class="check"><input type="checkbox" name="clear_feishu_webhook_url"> 清空 Webhook</span>
+  </label>
+  <label class="check"><input type="checkbox" name="keep_history" {% if settings.keep_history %}checked{% endif %}> 保留 ECS 和 RDS 历史 IP，只新增不删除</label>
+  <div class="actions"><button type="submit">保存设置</button></div>
+</form>
+{% endblock %}

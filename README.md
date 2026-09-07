@@ -1,10 +1,10 @@
 # Aliyun IP Gate
 
-定时获取本机公网 IPv4，并同步到多个阿里云账号下的 ECS 安全组和 RDS IP 白名单。支持可选的国家、省份限制；未配置时不限制地域。
+定时获取本机公网 IPv4，并同步到多个阿里云账号下的 ECS 安全组和 RDS IP 白名单。配置通过本地 Web 管理后台保存到 SQLite，支持附加 IP、地域限制、飞书通知和同步记录。
 
 ## 安装
 
-需要 Python 3.9 或更高版本。
+需要 Python 3.11 或更高版本。
 
 ```bash
 python -m pip install -r requirements.txt
@@ -12,9 +12,93 @@ cp .env.example .env
 chmod 600 .env
 ```
 
+数据库默认保存到 `data/app.db`，首次启动时自动创建，目录权限为 `700`，数据库文件权限为 `600`。
+
+首次使用时先启动 Web 管理后台并完成配置，再启动定时同步 Worker。
+
+`.env` 仅用于 Web 服务启动参数：
+
+```dotenv
+WEB_PORT=17321
+WEB_ACCESS_TOKEN=replace_with_a_long_random_token
+```
+
+修改端口或访问 Token 后需要重启 Web 服务。Worker、阿里云账号及同步设置均不读取 `.env`。
+
+## 运行
+
+启动定时同步 Worker：
+
+```bash
+python main.py
+```
+
+仅执行一轮：
+
+```bash
+python main.py --once
+```
+
+启动本地 Web 管理后台：
+
+```bash
+python web.py
+```
+
+后台仅监听 `127.0.0.1`，端口由 `WEB_PORT` 配置。使用浏览器访问后，输入 `WEB_ACCESS_TOKEN` 进入管理后台。
+
+## PM2
+
+```bash
+pm2 start "python main.py" --name syncServerIP-worker
+pm2 start "python web.py" --name syncServerIP-web
+pm2 save
+```
+
+更新代码或配置运行环境后：
+
+```bash
+pm2 restart syncServerIP-worker --update-env
+pm2 restart syncServerIP-web --update-env
+```
+
+## Tailscale
+
+Web 服务保持监听本机回环地址，通过 Tailscale Serve 提供给 Tailnet：
+
+```bash
+tailscale serve --bg http://127.0.0.1:17321
+tailscale serve status
+```
+
+建议在 Tailscale ACL 中仅允许自己的用户或设备访问。Web 后台同时使用 `WEB_ACCESS_TOKEN` 验证访问身份。
+
+## Web 配置
+
+后台提供以下功能：
+
+- 查看当前同步 IP、最近成功时间、最近错误和同步记录。
+- 配置检查间隔、地域限制、ECS 规则描述和 RDS 白名单名称。
+- 配置 IPInfo Token 和飞书 Webhook；敏感值不会回显。
+- 管理多个阿里云账号及其 ECS 安全组、RDS 实例。
+- 管理需要一并同步的附加 IPv4 地址。
+- 手动触发一次同步；文件锁会阻止 Worker 和 Web 并发执行。
+
+Web 登录状态使用签名 Session，Token 变更并重启服务后，已有登录状态会失效。配置表单均包含 CSRF 校验。AccessKey Secret、IPInfo Token 和飞书 Webhook 保存在本机 SQLite 中，请限制 `.env` 和数据库文件的读取权限并定期备份。
+
+## 同步规则
+
+- ECS 规则描述使用 `前缀:1`、`前缀:2` 格式，只管理配置前缀及其严格编号规则。
+- 安全组没有同步规则时，自动创建 `TCP`、`1/65535`，即 TCP 全端口规则。
+- 如需其他协议或端口，先手工创建描述为配置前缀的单 IPv4 模板规则，程序会沿用其规格。
+- ECS 通常先创建新规则再删除旧规则，不会删除其他描述的规则。
+- RDS 使用独占白名单分组并以覆盖模式同步，禁止使用 `default`。
+- IP 不符合地域限制时不会修改已有安全组或白名单。
+- 每轮都会校验云端配置；IP 列表变化并同步成功后才发送飞书通知。
+
 ## RAM 权限
 
-创建自定义策略并授权给 AccessKey 所属的 RAM 用户，授权范围选择“整个云账号”：
+创建自定义策略并授权给 AccessKey 所属的 RAM 用户：
 
 ```json
 {
@@ -37,82 +121,10 @@ chmod 600 .env
 
 只使用 ECS 或 RDS 时，可以删除另一类权限。
 
-## 配置
+## 测试
 
-所有配置位于 `.env`，完整示例和注释见 `.env.example`。
-
-```dotenv
-ALIYUN_ACCOUNTS=PRIMARY,SECONDARY
-
-ALIYUN_PRIMARY_ACCESS_KEY_ID=your_access_key_id
-ALIYUN_PRIMARY_ACCESS_KEY_SECRET=your_access_key_secret
-ALIYUN_PRIMARY_SECURITY_GROUPS=cn-chengdu:sg-example1,cn-hangzhou:sg-example2
-ALIYUN_PRIMARY_RDS_INSTANCES=rm-example1
-
-ALIYUN_SECONDARY_ACCESS_KEY_ID=your_access_key_id
-ALIYUN_SECONDARY_ACCESS_KEY_SECRET=your_access_key_secret
-ALIYUN_SECONDARY_SECURITY_GROUPS=
-ALIYUN_SECONDARY_RDS_INSTANCES=
-
-ALIYUN_ECS_RULE_DESCRIPTION=自动同步
-ALIYUN_RDS_WHITELIST_NAME=aliyun_sync_local_ip
-
-IP_ALLOWED_COUNTRY=CN
-IP_ALLOWED_REGION=Guizhou
-CHECK_INTERVAL_SECONDS=600
-IPINFO_TOKEN=
-IP_CACHE_FILE=.last_ip
-FEISHU_WEBHOOK_URL=
-```
-
-- `SECURITY_GROUPS` 格式为 `地域ID:安全组ID`，多个目标用英文逗号分隔。
-- `RDS_INSTANCES` 填写实例 ID，多个目标用英文逗号分隔。
-- 两项地域配置可分别留空；都为空或不存在时不限制地域。
-- 不使用某类目标时，将对应配置留空。
-- 配置 `FEISHU_WEBHOOK_URL` 后，本地公网 IP 变更并成功同步时会发送飞书群机器人通知。
-
-## 同步规则
-
-- ECS 规则描述使用 `自动同步:1`、`自动同步:2` 格式，只管理配置前缀及其严格编号规则。
-- 安全组没有同步规则时，自动创建 `TCP`、`1/65535`，即 TCP 全端口规则。
-- 如需其他协议或端口，先手工创建描述为 `自动同步` 的单 IPv4 模板规则，程序会沿用其规格。
-- ECS 通常先创建新规则再删除旧规则；不会删除其他描述的规则。
-- RDS 使用独占白名单分组并以覆盖模式同步，禁止使用 `default`。
-- IP 不符合地域限制时直接返回，不删除此前同步的 IP。
-
-## 运行
-
-执行一次：
+测试使用临时 SQLite 和模拟客户端，不会调用真实阿里云或飞书接口：
 
 ```bash
-python main.py --once
+python -m unittest discover -s tests -v
 ```
-
-持续运行：
-
-```bash
-python main.py
-```
-
-保留 ECS 和 RDS 中的历史 IP，只新增不删除：
-
-```bash
-python main.py --once --keep-history
-python main.py --keep-history
-```
-
-额外同步指定 IPv4 地址：
-
-```bash
-python main.py --additional-ips 203.0.113.10,203.0.113.11
-```
-
-显式传入的地址会保存到 `.additional_ips`，以后启动时无需再次传入参数。需要清空时执行：
-
-```bash
-python main.py --once --additional-ips ""
-```
-
-程序按 `CHECK_INTERVAL_SECONDS` 定时检查。只有全部目标同步成功后才更新 `.last_ip`；新增目标或修改配置后，可删除 `.last_ip` 再执行一次。
-
-不要提交 `.env` 或泄露 AccessKey。建议使用专用 RAM 用户。

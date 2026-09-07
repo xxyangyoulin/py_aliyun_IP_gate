@@ -1,6 +1,7 @@
 .env
 .last_ip
 .additional_ips
+data/
 __pycache__/
 *.py[cod]
 .idea/

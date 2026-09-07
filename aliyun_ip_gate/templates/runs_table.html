@@ -1,0 +1,18 @@
+{% if runs %}
+<div class="table-scroll">
+  <table>
+    <thead><tr><th>开始时间</th><th>状态</th><th>检测 IP</th><th>同步 IP</th><th>结果</th></tr></thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td>{{ run['started_at'] }}</td>
+        <td><span class="status {% if run['success'] %}success{% else %}failed{% endif %}">{% if run['success'] %}成功{% else %}失败{% endif %}</span></td>
+        <td class="wrap">{{ run['detected_ips'] or '-' }}</td>
+        <td class="wrap">{{ run['target_ips'] or '-' }}</td>
+        <td class="wrap">{{ run['message'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}<div class="empty">暂无同步记录。</div>{% endif %}

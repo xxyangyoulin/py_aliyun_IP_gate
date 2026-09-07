@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}运行状态 · Aliyun IP Gate{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <h1>运行状态</h1>
+    <p>查看最近一次同步结果和当前配置规模。</p>
+  </div>
+  <form method="post" action="/sync">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">立即同步</button>
+  </form>
+</div>
+
+<section class="stats">
+  <article><span>当前同步 IP</span><strong class="wrap">{{ state['last_ips'] or '尚未同步' }}</strong></article>
+  <article><span>上次成功</span><strong>{{ state['last_success_at'] or '尚无记录' }}</strong></article>
+  <article><span>账号 / ECS / RDS</span><strong>{{ account_count }} / {{ ecs_count }} / {{ rds_count }}</strong></article>
+  <article><span>附加 IP</span><strong>{{ additional_ip_count }}</strong></article>
+</section>
+
+{% if state['last_error'] %}
+<section class="panel danger-panel">
+  <h2>最近错误</h2>
+  <p>{{ state['last_error'] }}</p>
+</section>
+{% endif %}
+
+<section class="panel">
+  <div class="section-heading"><h2>最近同步</h2><a href="/runs">查看全部</a></div>
+  {% include "runs_table.html" %}
+</section>
+{% endblock %}

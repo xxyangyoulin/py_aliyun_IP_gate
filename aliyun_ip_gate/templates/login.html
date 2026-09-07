@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}登录 · Aliyun IP Gate{% endblock %}
+{% block content %}
+<section class="login-card panel">
+  <h1>访问验证</h1>
+  <p>请输入 `.env` 中配置的 Web 访问 Token。</p>
+  {% if token_configured %}
+  <form class="form" method="post" action="/login">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>访问 Token
+      <input type="password" name="access_token" required autofocus autocomplete="current-password">
+    </label>
+    <button type="submit">进入管理后台</button>
+  </form>
+  {% else %}
+  <div class="error">请先在 `.env` 中配置 `WEB_ACCESS_TOKEN` 并重启 Web 服务。</div>
+  {% endif %}
+</section>
+{% endblock %}
