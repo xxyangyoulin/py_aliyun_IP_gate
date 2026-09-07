@@ -49,7 +49,57 @@ class SyncServiceTests(unittest.TestCase):
                 sync_service.sync_once(database)
 
             self.assertEqual(synced, [["198.51.100.1"]])
-            self.assertEqual(len(database.list_sync_runs()), 1)
+            runs = database.list_sync_runs()
+            self.assertEqual(len(runs), 1)
+            self.assertEqual(runs[0]["resources"][0]["action"], "unchanged")
+
+    def test_preview_only_reads_cloud_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = self.create_database(directory)
+            with (
+                patch.object(
+                    sync_service,
+                    "get_public_ips",
+                    return_value=[("198.51.100.1", None, None)],
+                ),
+                patch.object(sync_service, "EcsClient", return_value=object()),
+                patch.object(
+                    sync_service,
+                    "sync_ecs_group",
+                    return_value={
+                        "added_ips": ["198.51.100.1"],
+                        "removed_ips": [],
+                    },
+                ) as sync_ecs_group,
+                redirect_stdout(StringIO()),
+            ):
+                result = sync_service.preview_sync(database)
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["resources"][0]["action"], "changed")
+            self.assertTrue(sync_ecs_group.call_args.args[-1])
+            self.assertEqual(database.count_sync_runs(), 0)
+
+    def test_account_connection_only_reads_resources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = self.create_database(directory)
+            account_id = database.list_accounts()[0].id
+            with (
+                patch.object(sync_service, "EcsClient", return_value=object()),
+                patch.object(
+                    sync_service,
+                    "sync_ecs_group",
+                    return_value={"added_ips": [], "removed_ips": []},
+                ) as sync_ecs_group,
+                redirect_stdout(StringIO()),
+            ):
+                result = sync_service.check_account_connection(
+                    database, account_id
+                )
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["resources"][0]["action"], "checked")
+            self.assertTrue(sync_ecs_group.call_args.args[-1])
 
     def test_missing_targets_does_not_query_public_ip(self):
         with tempfile.TemporaryDirectory() as directory:

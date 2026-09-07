@@ -1,33 +1,62 @@
 {% extends "base.html" %}
 {% block title %}运行状态 · Aliyun IP Gate{% endblock %}
 {% block content %}
-<div class="page-heading">
-  <div>
-    <h1>运行状态</h1>
-    <p>查看最近一次同步结果和当前配置规模。</p>
+<div class="page-heading hero-heading">
+  <div><span class="section-kicker">OVERVIEW</span><h1>运行状态</h1><p>实时掌握公网 IP 与云端访问规则的同步状态。</p></div>
+  <div class="heading-actions">
+    <button class="button secondary" type="button" data-sync-preview>预览变更</button>
+    <form method="post" action="/sync" data-sync-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="primary-button" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.7 6.3A8 8 0 1 0 20 12h-3a5 5 0 1 1-1.5-3.5L12 12h9V3l-3.3 3.3Z"/></svg><span data-button-label>立即同步</span></button>
+    </form>
   </div>
-  <form method="post" action="/sync">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button type="submit">立即同步</button>
-  </form>
 </div>
 
 <section class="stats">
-  <article><span>当前同步 IP</span><strong class="wrap">{{ state['last_ips'] or '尚未同步' }}</strong></article>
-  <article><span>上次成功</span><strong>{{ state['last_success_at'] or '尚无记录' }}</strong></article>
-  <article><span>账号 / ECS / RDS</span><strong>{{ account_count }} / {{ ecs_count }} / {{ rds_count }}</strong></article>
-  <article><span>附加 IP</span><strong>{{ additional_ip_count }}</strong></article>
+  <article class="stat-card accent-blue">
+    <div class="stat-top"><span>当前同步 IP</span><div class="stat-icon">IP</div></div>
+    {% if state['last_ips'] %}
+    <div class="ip-tags stat-ip-tags">
+      {% for ip in state['last_ips'].split(',') %}<span class="ip-tag">{{ ip.strip() }}</span>{% endfor %}
+    </div>
+    {% else %}<strong>尚未同步</strong>{% endif %}
+    <small>已授权的公网地址列表</small>
+  </article>
+  <article class="stat-card accent-violet">
+    <div class="stat-top"><span>上次成功</span><div class="stat-icon">✓</div></div>
+    {% if state['last_success_at'] %}<strong><time datetime="{{ state['last_success_at'] }}" data-local-time>{{ state['last_success_at'] }}</time></strong>{% else %}<strong>尚无记录</strong>{% endif %}<small>最近一次完整同步时间</small>
+  </article>
+  <article class="stat-card accent-cyan">
+    <div class="stat-top"><span>云端资源</span><div class="stat-icon">云</div></div>
+    <strong>{{ account_count }} <em>账号</em> · {{ ecs_count }} <em>ECS</em> · {{ rds_count }} <em>RDS</em></strong><small>{% if account_count %}当前纳管的资源规模{% else %}<a href="/accounts/new">添加第一个账号 →</a>{% endif %}</small>
+  </article>
+  <article class="stat-card accent-green">
+    <div class="stat-top"><span>附加 IP</span><div class="stat-icon">+</div></div>
+    <strong>{{ additional_ip_count }}</strong><small>随本地地址一并同步</small>
+  </article>
 </section>
+
+<section class="worker-panel panel">
+  <div class="worker-main"><span class="worker-dot {{ worker_status.state }}"></span><div><span class="section-kicker">WORKER</span><h2>自动同步 Worker</h2></div><span class="status {{ worker_status.state }}">{{ worker_status.label }}</span></div>
+  <div class="worker-times">
+    <span>启动时间<strong>{% if state['worker_started_at'] %}<time datetime="{{ state['worker_started_at'] }}" data-local-time>{{ state['worker_started_at'] }}</time>{% else %}-{% endif %}</strong></span>
+    <span>最近心跳<strong>{% if state['worker_heartbeat_at'] %}<time datetime="{{ state['worker_heartbeat_at'] }}" data-local-time>{{ state['worker_heartbeat_at'] }}</time>{% else %}-{% endif %}</strong></span>
+    <span>下次检查<strong>{% if state['worker_next_run_at'] %}<time datetime="{{ state['worker_next_run_at'] }}" data-local-time>{{ state['worker_next_run_at'] }}</time>{% elif worker_status.state == 'running' %}正在执行{% else %}-{% endif %}</strong></span>
+  </div>
+</section>
+
+<dialog class="result-dialog" data-preview-dialog>
+  <div class="result-dialog-head"><div><span class="section-kicker">DRY RUN</span><h2>同步变更预览</h2><p data-result-message>正在读取公网 IP 和云端配置…</p></div><button type="button" data-result-close aria-label="关闭">×</button></div>
+  <div class="preview-ips" data-preview-ips></div>
+  <div class="resource-results" data-resource-results></div>
+</dialog>
 
 {% if state['last_error'] %}
-<section class="panel danger-panel">
-  <h2>最近错误</h2>
-  <p>{{ state['last_error'] }}</p>
-</section>
+<section class="panel danger-panel"><div class="panel-icon">!</div><div><h2>最近一次同步异常</h2><p>{{ state['last_error'] }}</p></div></section>
 {% endif %}
 
-<section class="panel">
-  <div class="section-heading"><h2>最近同步</h2><a href="/runs">查看全部</a></div>
+<section class="panel activity-panel">
+  <div class="section-heading"><div><span class="section-kicker">ACTIVITY</span><h2>最近同步</h2></div><a class="text-link" href="/runs">查看全部 <span>→</span></a></div>
   {% include "runs_table.html" %}
 </section>
 {% endblock %}

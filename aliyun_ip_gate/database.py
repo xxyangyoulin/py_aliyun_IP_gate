@@ -66,7 +66,11 @@ class Database:
                     id INTEGER PRIMARY KEY CHECK (id = 1),
                     last_ips TEXT NOT NULL,
                     last_success_at TEXT,
-                    last_error TEXT NOT NULL
+                    last_error TEXT NOT NULL,
+                    worker_started_at TEXT,
+                    worker_heartbeat_at TEXT,
+                    worker_next_run_at TEXT,
+                    worker_active INTEGER NOT NULL DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS sync_runs (
@@ -79,13 +83,41 @@ class Database:
                     message TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS sync_run_resources (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id INTEGER NOT NULL REFERENCES sync_runs(id) ON DELETE CASCADE,
+                    account_name TEXT NOT NULL,
+                    resource_type TEXT NOT NULL,
+                    resource_id TEXT NOT NULL,
+                    success INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    message TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_sync_run_resources_run_id
+                ON sync_run_resources(run_id);
+
                 CREATE TABLE IF NOT EXISTS metadata (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 );
                 """
             )
-            connection.execute("PRAGMA user_version = 1")
+            runtime_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(runtime_state)")
+            }
+            for name, definition in (
+                ("worker_started_at", "TEXT"),
+                ("worker_heartbeat_at", "TEXT"),
+                ("worker_next_run_at", "TEXT"),
+                ("worker_active", "INTEGER NOT NULL DEFAULT 0"),
+            ):
+                if name not in runtime_columns:
+                    connection.execute(
+                        f"ALTER TABLE runtime_state ADD COLUMN {name} {definition}"
+                    )
+            connection.execute("PRAGMA user_version = 2")
             connection.execute(
                 """
                 INSERT OR IGNORE INTO settings VALUES
@@ -93,7 +125,11 @@ class Database:
                 """
             )
             connection.execute(
-                "INSERT OR IGNORE INTO runtime_state VALUES (1, '', NULL, '')"
+                """
+                INSERT OR IGNORE INTO runtime_state
+                    (id, last_ips, last_success_at, last_error)
+                VALUES (1, '', NULL, '')
+                """
             )
             connection.execute(
                 "INSERT OR IGNORE INTO metadata VALUES ('web_secret', ?)",
@@ -350,11 +386,49 @@ class Database:
                 "UPDATE runtime_state SET last_error = ? WHERE id = 1", (error,)
             )
 
-    def add_sync_run(
-        self, started_at, finished_at, detected_ips, target_ips, success, message
-    ):
+    def record_worker_started(self, started_at):
         with self.connect() as connection:
             connection.execute(
+                """
+                UPDATE runtime_state SET worker_started_at = ?,
+                    worker_heartbeat_at = ?, worker_next_run_at = NULL,
+                    worker_active = 1 WHERE id = 1
+                """,
+                (started_at, started_at),
+            )
+
+    def record_worker_schedule(self, heartbeat_at, next_run_at):
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE runtime_state SET worker_heartbeat_at = ?,
+                    worker_next_run_at = ?, worker_active = 1 WHERE id = 1
+                """,
+                (heartbeat_at, next_run_at),
+            )
+
+    def record_worker_stopped(self, stopped_at):
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE runtime_state SET worker_heartbeat_at = ?,
+                    worker_next_run_at = NULL, worker_active = 0 WHERE id = 1
+                """,
+                (stopped_at,),
+            )
+
+    def add_sync_run(
+        self,
+        started_at,
+        finished_at,
+        detected_ips,
+        target_ips,
+        success,
+        message,
+        resources=(),
+    ):
+        with self.connect() as connection:
+            cursor = connection.execute(
                 """
                 INSERT INTO sync_runs
                     (started_at, finished_at, detected_ips, target_ips, success, message)
@@ -369,12 +443,61 @@ class Database:
                     message,
                 ),
             )
+            connection.executemany(
+                """
+                INSERT INTO sync_run_resources
+                    (run_id, account_name, resource_type, resource_id,
+                     success, action, message)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    (
+                        cursor.lastrowid,
+                        resource["account_name"],
+                        resource["resource_type"],
+                        resource["resource_id"],
+                        int(resource["success"]),
+                        resource["action"],
+                        resource["message"],
+                    )
+                    for resource in resources
+                ),
+            )
+            return cursor.lastrowid
 
     def list_sync_runs(self, limit=100):
         with self.connect() as connection:
-            return connection.execute(
+            rows = connection.execute(
                 "SELECT * FROM sync_runs ORDER BY id DESC LIMIT ?", (limit,)
             ).fetchall()
+            runs = [dict(row) for row in rows]
+            if not runs:
+                return runs
+            placeholders = ",".join("?" for _ in runs)
+            resource_rows = connection.execute(
+                f"""
+                SELECT * FROM sync_run_resources
+                WHERE run_id IN ({placeholders}) ORDER BY id
+                """,
+                tuple(run["id"] for run in runs),
+            ).fetchall()
+        resources_by_run = {}
+        for row in resource_rows:
+            resources_by_run.setdefault(row["run_id"], []).append(dict(row))
+        for run in runs:
+            run["resources"] = resources_by_run.get(run["id"], [])
+        return runs
+
+    def count_sync_runs(self):
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM sync_runs"
+            ).fetchone()
+        return row["count"]
+
+    def clear_sync_runs(self):
+        with self.connect() as connection:
+            connection.execute("DELETE FROM sync_runs")
 
     def get_web_secret(self):
         with self.connect() as connection:

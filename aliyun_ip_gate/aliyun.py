@@ -6,8 +6,15 @@ from alibabacloud_rds20140815 import models as rds_models
 
 
 def sync_ecs_group(
-    client, region_id, security_group_id, ips, description_prefix, keep_history=False
+    client,
+    region_id,
+    security_group_id,
+    ips,
+    description_prefix,
+    keep_history=False,
+    dry_run=False,
 ):
+    changes = {"added_ips": [], "removed_ips": []}
     rules = []
     next_token = None
     while True:
@@ -85,16 +92,6 @@ def sync_ecs_group(
             return None
         return str(source.network_address)
 
-    def revoke(rule_ids):
-        if not rule_ids:
-            return
-        request = ecs_models.RevokeSecurityGroupRequest(
-            region_id=region_id,
-            security_group_id=security_group_id,
-            security_group_rule_id=rule_ids,
-        )
-        client.revoke_security_group(request)
-
     for shape, group in groups.items():
         templates = group["templates"]
         numbered = group["numbered"]
@@ -148,7 +145,26 @@ def sync_ecs_group(
                 nic_type=nic_type,
                 description=f"{description_prefix}:{number}",
             )
-            client.authorize_security_group(request)
+            changes["added_ips"].append(ip)
+            if not dry_run:
+                client.authorize_security_group(request)
+
+        def revoke(rules_to_revoke):
+            if not rules_to_revoke:
+                return
+            changes["removed_ips"].extend(
+                ip for ip in (rule_ip(rule) for rule in rules_to_revoke) if ip
+            )
+            if dry_run:
+                return
+            request = ecs_models.RevokeSecurityGroupRequest(
+                region_id=region_id,
+                security_group_id=security_group_id,
+                security_group_rule_id=[
+                    rule.security_group_rule_id for rule in rules_to_revoke
+                ],
+            )
+            client.revoke_security_group(request)
 
         if keep_history:
             existing_ips = {rule_ip(rule) for rule in all_group_rules}
@@ -176,16 +192,20 @@ def sync_ecs_group(
             ]
             if not conflicting_rules:
                 continue
-            revoke([rule.security_group_rule_id for rule in conflicting_rules])
+            revoke(conflicting_rules)
             obsolete_rules = [
                 rule for rule in obsolete_rules if rule not in conflicting_rules
             ]
             authorize(number, ip)
 
-        revoke([rule.security_group_rule_id for rule in obsolete_rules])
+        revoke(obsolete_rules)
+
+    return changes
 
 
-def sync_rds_instance(client, instance_id, ips, whitelist_name, keep_history=False):
+def sync_rds_instance(
+    client, instance_id, ips, whitelist_name, keep_history=False, dry_run=False
+):
     request = rds_models.DescribeDBInstanceIPArrayListRequest(dbinstance_id=instance_id)
     body = client.describe_dbinstance_iparray_list(request).body
     groups = body.items.dbinstance_iparray if body.items else []
@@ -201,8 +221,12 @@ def sync_rds_instance(client, instance_id, ips, whitelist_name, keep_history=Fal
     target_ips = set(ips)
     if keep_history:
         target_ips.update(current_ips)
+    changes = {
+        "added_ips": sorted(target_ips - current_ips),
+        "removed_ips": sorted(current_ips - target_ips),
+    }
     if current_ips == target_ips:
-        return
+        return changes
     security_ips = ",".join(sorted(target_ips))
 
     request = rds_models.ModifySecurityIpsRequest(
@@ -212,4 +236,6 @@ def sync_rds_instance(client, instance_id, ips, whitelist_name, keep_history=Fal
         security_iptype="IPv4",
         modify_mode="Cover",
     )
-    client.modify_security_ips(request)
+    if not dry_run:
+        client.modify_security_ips(request)
+    return changes

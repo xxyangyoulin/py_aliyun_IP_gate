@@ -1,13 +1,21 @@
 {% extends "base.html" %}
 {% block title %}附加 IP · Aliyun IP Gate{% endblock %}
 {% block content %}
-<h1>附加 IP</h1>
-<form class="panel form" method="post" action="/additional-ips">
+<div class="page-heading">
+  <div><span class="section-kicker">ACCESS LIST</span><h1>附加 IP</h1><p>管理需要随本地公网地址一并授权的固定 IP。</p></div>
+</div>
+<section class="guide-strip compact-guide"><div><strong>什么时候需要附加 IP？</strong><p>服务器有多个固定出口，或需要同时保留办公网络地址时，在这里添加；自动同步不会覆盖这些地址。</p></div></section>
+<form class="panel form" method="post" action="/additional-ips" data-dirty-check>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label>额外同步的 IPv4 地址
-    <textarea name="additional_ips" rows="10" placeholder="每行一个 IPv4 地址">{% for ip in additional_ips %}{{ ip }}{% if not loop.last %}
-{% endif %}{% endfor %}</textarea>
-  </label>
+  <label>额外同步的 IPv4 地址</label>
+  <div class="ip-editor" data-ip-editor>
+    <div class="ip-tags" data-ip-tags>
+      {% for ip in additional_ips %}<span class="ip-tag editable" data-ip="{{ ip }}">{{ ip }}<button type="button" aria-label="删除 {{ ip }}">×</button></span>{% endfor %}
+    </div>
+    <input data-ip-input inputmode="decimal" autocomplete="off" placeholder="输入 IPv4 后按回车或逗号添加">
+  </div>
+  <input type="hidden" name="additional_ips" value="{{ additional_ips|join(',') }}" data-ip-value>
+  <p class="field-feedback" data-ip-feedback aria-live="polite"></p>
   <p class="hint">保存后，下一轮同步会自动将这些地址加入所有 ECS 安全组和 RDS 白名单。</p>
   <div class="actions"><button type="submit">保存附加 IP</button></div>
 </form>

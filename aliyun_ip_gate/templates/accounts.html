@@ -2,9 +2,40 @@
 {% block title %}阿里云账号 · Aliyun IP Gate{% endblock %}
 {% block content %}
 <div class="page-heading">
-  <div><h1>阿里云账号</h1><p>管理账号凭证以及关联的 ECS 和 RDS 目标。</p></div>
+  <div><span class="section-kicker">CLOUD ACCOUNTS</span><h1>阿里云账号</h1><p>管理账号凭证以及关联的 ECS 和 RDS 目标。</p></div>
   <a class="button" href="/accounts/new">添加账号</a>
 </div>
+<section class="setup-assistant">
+  <div class="assistant-icon">✦</div>
+  <div><strong>首次配置阿里云授权？</strong><p>跟随配置助手创建 RAM 用户并授予最小权限。</p></div>
+  <button class="button secondary" type="button" data-guide-open>打开配置助手</button>
+</section>
+
+<dialog class="guide-dialog" data-guide-dialog>
+  <div class="guide-dialog-head"><div><span class="section-kicker">SETUP ASSISTANT</span><h2>阿里云授权配置</h2><p>按顺序完成以下操作，通常只需几分钟。</p></div><button type="button" data-guide-close aria-label="关闭配置助手">×</button></div>
+  <ol class="guide-timeline">
+    <li><span>1</span><div><strong>创建 RAM 用户</strong><p>为本应用创建独立用户，并创建 OpenAPI AccessKey。</p><a href="https://ram.console.aliyun.com/users" target="_blank" rel="noopener noreferrer">打开 RAM 用户管理 ↗</a></div></li>
+    <li><span>2</span><div><strong>创建并授权自定义策略</strong><p>复制下方策略，在权限策略管理中新建策略，再授权给刚创建的用户。</p><a href="https://ram.console.aliyun.com/policies" target="_blank" rel="noopener noreferrer">打开权限策略管理 ↗</a></div></li>
+    <li><span>3</span><div><strong>回到本应用添加账号</strong><p>保存 AccessKey，并填写需要同步的 ECS 安全组或 RDS 实例。</p><a href="/accounts/new">添加阿里云账号 →</a></div></li>
+  </ol>
+  <div class="code-block"><button type="button" data-copy-target="ram-policy">复制代码</button><pre id="ram-policy"><code>{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeSecurityGroupAttribute",
+        "ecs:AuthorizeSecurityGroup",
+        "ecs:RevokeSecurityGroup",
+        "rds:DescribeDBInstanceIPArrayList",
+        "rds:ModifySecurityIps"
+      ],
+      "Resource": "*"
+    }
+  ]
+}</code></pre></div>
+  <p class="field-help">只使用 ECS 或 RDS 时，可以删除另一类权限。</p>
+</dialog>
 <section class="panel">
   {% if accounts %}
   <table>
@@ -17,8 +48,12 @@
         <td>{{ account.security_groups|length }}</td>
         <td>{{ account.rds_instances|length }}</td>
         <td class="row-actions">
+          <form method="post" action="/accounts/{{ account.id }}/test" data-account-test data-account-name="{{ account.name }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="link" type="submit">测试连接</button>
+          </form>
           <a href="/accounts/{{ account.id }}/edit">编辑</a>
-          <form method="post" action="/accounts/{{ account.id }}/delete" onsubmit="return confirm('确认删除该账号及其所有目标？')">
+          <form method="post" action="/accounts/{{ account.id }}/delete" data-confirm="确认删除账号“{{ account.name }}”及其所有 ECS、RDS 目标？" data-confirm-title="删除阿里云账号">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button class="link danger" type="submit">删除</button>
           </form>
@@ -27,6 +62,10 @@
       {% endfor %}
     </tbody>
   </table>
-  {% else %}<div class="empty">尚未配置阿里云账号。</div>{% endif %}
+  {% else %}<div class="empty-state"><div class="empty-icon">云</div><h2>尚未配置阿里云账号</h2><p>完成上方 RAM 授权后，将 AccessKey 和云资源添加到这里。</p><a class="button" href="/accounts/new">添加第一个账号</a></div>{% endif %}
 </section>
+<dialog class="result-dialog" data-account-test-dialog>
+  <div class="result-dialog-head"><div><span class="section-kicker">CONNECTION TEST</span><h2 data-result-title>账号连接测试</h2><p data-result-message></p></div><button type="button" data-result-close aria-label="关闭">×</button></div>
+  <div class="resource-results" data-resource-results></div>
+</dialog>
 {% endblock %}

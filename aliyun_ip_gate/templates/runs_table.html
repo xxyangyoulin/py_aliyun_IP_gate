@@ -4,15 +4,19 @@
     <thead><tr><th>开始时间</th><th>状态</th><th>检测 IP</th><th>同步 IP</th><th>结果</th></tr></thead>
     <tbody>
       {% for run in runs %}
-      <tr>
-        <td>{{ run['started_at'] }}</td>
+      <tr data-run-status="{% if run['success'] %}success{% else %}failed{% endif %}">
+        <td><time datetime="{{ run['started_at'] }}" data-local-time>{{ run['started_at'] }}</time><small class="relative-time" data-relative-time="{{ run['started_at'] }}"></small></td>
         <td><span class="status {% if run['success'] %}success{% else %}failed{% endif %}">{% if run['success'] %}成功{% else %}失败{% endif %}</span></td>
-        <td class="wrap">{{ run['detected_ips'] or '-' }}</td>
-        <td class="wrap">{{ run['target_ips'] or '-' }}</td>
-        <td class="wrap">{{ run['message'] }}</td>
+        <td>
+          {% if run['detected_ips'] %}<div class="ip-tags compact">{% for ip in run['detected_ips'].split(',') %}<span class="ip-tag">{{ ip.strip() }}</span>{% endfor %}</div>{% else %}-{% endif %}
+        </td>
+        <td>
+          {% if run['target_ips'] %}<div class="ip-tags compact">{% for ip in run['target_ips'].split(',') %}<span class="ip-tag">{{ ip.strip() }}</span>{% endfor %}</div>{% else %}-{% endif %}
+        </td>
+        <td class="run-message"><details><summary>{{ run['message']|truncate(34) }}</summary><p>{{ run['message'] }}</p>{% if run['resources'] %}<div class="run-resources">{% for resource in run['resources'] %}<div><span class="resource-badge {{ resource['action'] }}">{{ resource['resource_type'] }}</span><strong>{{ resource['account_name'] }} / {{ resource['resource_id'] }}</strong><small>{{ resource['message'] }}</small></div>{% endfor %}</div>{% endif %}</details></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-{% else %}<div class="empty">暂无同步记录。</div>{% endif %}
+{% else %}<div class="empty-state"><div class="empty-icon">↻</div><h2>暂无同步记录</h2><p>{% if request.url.path == '/' %}完成账号配置后，点击“立即同步”创建第一条记录。{% else %}同步任务执行后，结果会按时间显示在这里。{% endif %}</p>{% if request.url.path == '/runs' %}<a class="button secondary" href="/">返回运行状态</a>{% endif %}</div>{% endif %}

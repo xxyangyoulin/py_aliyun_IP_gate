@@ -1,11 +1,12 @@
 import os
 import secrets
 import sqlite3
+from datetime import datetime, timedelta
 from hashlib import sha256
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
@@ -14,7 +15,12 @@ from starlette.middleware.sessions import SessionMiddleware
 from .config import Settings
 from .database import Database
 from .ip import parse_additional_ips
-from .sync_service import SyncAlreadyRunning, sync_once
+from .sync_service import (
+    SyncAlreadyRunning,
+    check_account_connection,
+    preview_sync,
+    sync_once,
+)
 from .web_config import load_web_config
 
 
@@ -62,6 +68,22 @@ def mask_secret(value):
 
 
 templates.env.globals["mask_secret"] = mask_secret
+
+
+def get_worker_status(state, interval):
+    if not state["worker_active"]:
+        return {"state": "stopped", "label": "未运行"}
+    heartbeat = state["worker_heartbeat_at"]
+    if not heartbeat:
+        return {"state": "unknown", "label": "状态未知"}
+    heartbeat_at = datetime.fromisoformat(heartbeat)
+    deadline = heartbeat_at + timedelta(seconds=max(interval * 2, 300))
+    if state["worker_next_run_at"]:
+        next_run_at = datetime.fromisoformat(state["worker_next_run_at"])
+        deadline = max(deadline, next_run_at + timedelta(seconds=90))
+    if datetime.now().astimezone() > deadline:
+        return {"state": "overdue", "label": "心跳超时"}
+    return {"state": "running", "label": "运行中"}
 
 
 def render(request, template_name, **context):
@@ -162,10 +184,33 @@ async def logout(request: Request):
     return RedirectResponse("/login", status_code=303)
 
 
+@app.post("/secrets/reveal")
+async def reveal_secret(request: Request):
+    form = await read_form(request)
+    secret_name = str(form.get("secret_name", ""))
+    if secret_name == "ipinfo_token":
+        value = database.get_settings().ipinfo_token
+    elif secret_name == "feishu_webhook_url":
+        value = database.get_settings().feishu_webhook_url
+    elif secret_name == "access_key_secret":
+        try:
+            account_id = int(str(form.get("account_id", "")))
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail="账号 ID 无效") from error
+        account = database.get_account(account_id)
+        if account is None:
+            raise HTTPException(status_code=404, detail="账号不存在")
+        value = account.access_key_secret
+    else:
+        raise HTTPException(status_code=400, detail="密钥类型无效")
+    return JSONResponse({"value": value}, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     state = database.get_runtime_state()
     accounts = database.list_accounts()
+    settings = database.get_settings()
     return render(
         request,
         "dashboard.html",
@@ -174,6 +219,7 @@ def dashboard(request: Request):
         ecs_count=sum(len(account.security_groups) for account in accounts),
         rds_count=sum(len(account.rds_instances) for account in accounts),
         additional_ip_count=len(database.get_additional_ips()),
+        worker_status=get_worker_status(state, settings.check_interval_seconds),
         runs=database.list_sync_runs(10),
     )
 
@@ -319,6 +365,24 @@ async def delete_account(account_id: int, request: Request):
     return RedirectResponse("/accounts", status_code=303)
 
 
+@app.post("/accounts/{account_id}/test")
+async def test_account(account_id: int, request: Request):
+    await read_form(request)
+    try:
+        result = await run_in_threadpool(
+            check_account_connection, database, account_id
+        )
+        status_code = 200 if result["success"] else 400
+    except Exception as error:
+        result = {"success": False, "message": str(error), "resources": []}
+        status_code = 400
+    return JSONResponse(
+        result,
+        status_code=status_code,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/additional-ips", response_class=HTMLResponse)
 def additional_ips_page(request: Request):
     return render(
@@ -351,7 +415,39 @@ async def save_additional_ips(request: Request):
 
 @app.get("/runs", response_class=HTMLResponse)
 def runs_page(request: Request):
-    return render(request, "runs.html", runs=database.list_sync_runs(100))
+    return render(
+        request,
+        "runs.html",
+        runs=database.list_sync_runs(100),
+        run_count=database.count_sync_runs(),
+    )
+
+
+@app.post("/runs/clear")
+async def clear_runs(request: Request):
+    await read_form(request)
+    database.clear_sync_runs()
+    request.session["flash"] = "同步记录已清除"
+    return RedirectResponse("/runs", status_code=303)
+
+
+@app.post("/sync/preview")
+async def run_sync_preview(request: Request):
+    await read_form(request)
+    try:
+        result = await run_in_threadpool(preview_sync, database)
+        status_code = 200 if result["success"] else 400
+    except SyncAlreadyRunning as error:
+        result = {"success": False, "message": str(error), "resources": []}
+        status_code = 409
+    except Exception as error:
+        result = {"success": False, "message": str(error), "resources": []}
+        status_code = 400
+    return JSONResponse(
+        result,
+        status_code=status_code,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.post("/sync")

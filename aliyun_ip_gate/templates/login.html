@@ -8,7 +8,7 @@
   <form class="form" method="post" action="/login">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>访问 Token
-      <input type="password" name="access_token" required autofocus autocomplete="current-password">
+      <span class="secret-input"><input type="password" name="access_token" required autofocus autocomplete="current-password"><button type="button" data-password-toggle aria-label="显示访问 Token">显示</button></span>
     </label>
     <button type="submit">进入管理后台</button>
   </form>

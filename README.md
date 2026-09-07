@@ -81,8 +81,12 @@ tailscale serve status
 - 配置检查间隔、地域限制、ECS 规则描述和 RDS 白名单名称。
 - 配置 IPInfo Token 和飞书 Webhook；敏感值不会回显。
 - 管理多个阿里云账号及其 ECS 安全组、RDS 实例。
+- 对单个账号执行只读连接测试，检查凭证和目标资源是否可读取。
 - 管理需要一并同步的附加 IPv4 地址。
+- 在执行同步前预览每个资源预计新增、删除或保持不变的 IP。
 - 手动触发一次同步；文件锁会阻止 Worker 和 Web 并发执行。
+- 查看 Worker 启动时间、最近心跳、下次检查时间和资源级同步结果。
+- 查看同步记录总数，并按需清除全部历史记录。
 
 Web 登录状态使用签名 Session，Token 变更并重启服务后，已有登录状态会失效。配置表单均包含 CSRF 校验。AccessKey Secret、IPInfo Token 和飞书 Webhook 保存在本机 SQLite 中，请限制 `.env` 和数据库文件的读取权限并定期备份。
 

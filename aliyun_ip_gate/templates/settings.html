@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block title %}基础设置 · Aliyun IP Gate{% endblock %}
 {% block content %}
-<h1>基础设置</h1>
-<form class="panel form" method="post" action="/settings">
+<div class="page-heading">
+  <div><span class="section-kicker">PREFERENCES</span><h1>基础设置</h1><p>配置同步频率、访问限制和通知方式。</p></div>
+</div>
+<form class="panel form" method="post" action="/settings" data-dirty-check>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <div class="grid two">
     <label>检查间隔（秒）
@@ -21,13 +23,15 @@
       <input name="rds_whitelist_name" value="{{ settings.rds_whitelist_name }}" required>
     </label>
     <label>IPInfo Token
-      <input type="password" name="ipinfo_token" placeholder="{{ mask_secret(settings.ipinfo_token) }}；留空保持不变">
+      <span class="secret-input"><input type="password" name="ipinfo_token" placeholder="{{ mask_secret(settings.ipinfo_token) }}；留空保持不变"><button type="button" data-password-toggle {% if settings.ipinfo_token %}data-reveal-secret="ipinfo_token"{% endif %} aria-label="显示 Token">显示</button></span>
       <span class="check"><input type="checkbox" name="clear_ipinfo_token"> 清空 Token</span>
+      <span class="field-help">用于提高归属地查询稳定性。<a href="https://ipinfo.io/account/token" target="_blank" rel="noopener noreferrer">获取 Token ↗</a></span>
     </label>
   </div>
   <label>飞书 Webhook
-    <input type="password" name="feishu_webhook_url" placeholder="{{ mask_secret(settings.feishu_webhook_url) }}；留空保持不变">
+    <span class="secret-input"><input type="password" name="feishu_webhook_url" placeholder="{{ mask_secret(settings.feishu_webhook_url) }}；留空保持不变"><button type="button" data-password-toggle {% if settings.feishu_webhook_url %}data-reveal-secret="feishu_webhook_url"{% endif %} aria-label="显示 Webhook">显示</button></span>
     <span class="check"><input type="checkbox" name="clear_feishu_webhook_url"> 清空 Webhook</span>
+    <span class="field-help">公网 IP 变化且同步成功后发送通知。<a href="https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot" target="_blank" rel="noopener noreferrer">查看飞书机器人配置 ↗</a></span>
   </label>
   <label class="check"><input type="checkbox" name="keep_history" {% if settings.keep_history %}checked{% endif %}> 保留 ECS 和 RDS 历史 IP，只新增不删除</label>
   <div class="actions"><button type="submit">保存设置</button></div>

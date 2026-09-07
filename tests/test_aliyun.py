@@ -45,6 +45,16 @@ class AliyunSyncTests(unittest.TestCase):
         self.assertEqual(client.authorized[0].source_cidr_ip, "203.0.113.10")
         self.assertEqual(client.authorized[0].description, "sync:1")
 
+    def test_ecs_dry_run_does_not_write(self):
+        client = EcsClient()
+
+        changes = sync_ecs_group(
+            client, "cn-test", "sg-test", ["203.0.113.10"], "sync", dry_run=True
+        )
+
+        self.assertEqual(client.authorized, [])
+        self.assertEqual(changes["added_ips"], ["203.0.113.10"])
+
     def test_rds_skips_unchanged_whitelist(self):
         client = RdsClient(["203.0.113.10"])
 
@@ -58,6 +68,17 @@ class AliyunSyncTests(unittest.TestCase):
         sync_rds_instance(client, "rm-test", ["203.0.113.11"], "sync")
 
         self.assertEqual(client.modified[0].security_ips, "203.0.113.11")
+
+    def test_rds_dry_run_does_not_write(self):
+        client = RdsClient(["203.0.113.10"])
+
+        changes = sync_rds_instance(
+            client, "rm-test", ["203.0.113.11"], "sync", dry_run=True
+        )
+
+        self.assertEqual(client.modified, [])
+        self.assertEqual(changes["added_ips"], ["203.0.113.11"])
+        self.assertEqual(changes["removed_ips"], ["203.0.113.10"])
 
 
 if __name__ == "__main__":

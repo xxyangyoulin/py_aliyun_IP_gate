@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}同步记录 · Aliyun IP Gate{% endblock %}
 {% block content %}
-<h1>同步记录</h1>
-<section class="panel">{% include "runs_table.html" %}</section>
+<div class="page-heading">
+  <div><span class="section-kicker">SYNC HISTORY</span><h1>同步记录 <small class="heading-count">{{ run_count }}</small></h1><p>查看公网地址检测及云端规则同步结果。</p></div>
+  {% if run_count %}<form method="post" action="/runs/clear" data-confirm="确认清除全部 {{ run_count }} 条同步记录？此操作无法撤销。" data-confirm-title="清除同步记录"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button secondary danger-text" type="submit">清除记录</button></form>{% endif %}
+</div>
+<section class="panel">
+  {% if runs %}<div class="run-toolbar" data-run-filters><span>当前共 {{ run_count }} 条{% if run_count > runs|length %}，显示最近 {{ runs|length }} 条{% endif %}</span><button class="active" type="button" data-run-filter="all">全部</button><button type="button" data-run-filter="success">成功</button><button type="button" data-run-filter="failed">失败</button></div>{% endif %}
+  {% include "runs_table.html" %}
+</section>
 {% endblock %}

@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{% if is_edit %}编辑账号{% else %}添加账号{% endif %} · Aliyun IP Gate{% endblock %}
 {% block content %}
-<h1>{% if is_edit %}编辑账号{% else %}添加账号{% endif %}</h1>
-<form class="panel form" method="post" action="/accounts/save">
+<div class="page-heading">
+  <div><span class="section-kicker">CLOUD ACCOUNT</span><h1>{% if is_edit %}编辑账号{% else %}添加账号{% endif %}</h1><p>设置凭证并关联需要同步的云端资源。</p></div>
+</div>
+<section class="guide-strip">
+  <div><strong>还没有 AccessKey？</strong><p>先创建 RAM 用户、授予最小权限，再将 AccessKey 填入下方。</p></div>
+  <a class="button secondary" href="https://ram.console.aliyun.com/users" target="_blank" rel="noopener noreferrer">前往 RAM 用户管理 ↗</a>
+</section>
+<form class="panel form" method="post" action="/accounts/save" data-dirty-check>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="account_id" value="{{ account.id if account else '' }}">
   <div class="grid two">
@@ -14,16 +20,29 @@
     </label>
   </div>
   <label>AccessKey Secret
-    <input type="password" name="access_key_secret" placeholder="{% if is_edit %}已配置；留空保持不变{% else %}请输入 AccessKey Secret{% endif %}" {% if not is_edit %}required{% endif %} autocomplete="new-password">
+    <span class="secret-input"><input type="password" name="access_key_secret" placeholder="{% if is_edit %}已配置；留空保持不变{% else %}请输入 AccessKey Secret{% endif %}" {% if not is_edit %}required{% endif %} autocomplete="new-password"><button type="button" data-password-toggle {% if is_edit %}data-reveal-secret="access_key_secret" data-account-id="{{ account.id }}"{% endif %} aria-label="显示 AccessKey Secret">显示</button></span>
   </label>
-  <label>ECS 安全组
-    <textarea name="security_groups" rows="5" placeholder="每行一个：cn-chengdu:sg-example">{% if account %}{% for target in account.security_groups %}{% if target is string %}{{ target }}{% else %}{{ target[0] }}:{{ target[1] }}{% endif %}{% if not loop.last %}
-{% endif %}{% endfor %}{% endif %}</textarea>
-  </label>
-  <label>RDS 实例
-    <textarea name="rds_instances" rows="4" placeholder="每行一个实例 ID">{% if account %}{% for target in account.rds_instances %}{{ target }}{% if not loop.last %}
-{% endif %}{% endfor %}{% endif %}</textarea>
-  </label>
+  <label>ECS 安全组</label>
+  <div class="target-editor" data-target-editor="ecs">
+    <div class="target-tags" data-target-tags>
+      {% if account %}{% for target in account.security_groups %}{% if target is string %}{% set target_value = target %}{% set region_id = target.split(':', 1)[0] %}{% else %}{% set target_value = target[0] ~ ':' ~ target[1] %}{% set region_id = target[0] %}{% endif %}<span class="target-tag" data-target-value="{{ target_value }}"><span>{{ target_value }}</span><a href="https://ecs.console.aliyun.com/securityGroup/region/{{ region_id }}" target="_blank" rel="noopener noreferrer" title="在阿里云控制台查看">↗</a><button type="button" aria-label="删除 {{ target_value }}">×</button></span>{% endfor %}{% endif %}
+    </div>
+    <input data-target-input autocomplete="off" placeholder="输入 cn-chengdu:sg-example 后按回车">
+  </div>
+  <input type="hidden" name="security_groups" data-target-list value="{% if account %}{% for target in account.security_groups %}{% if target is string %}{{ target }}{% else %}{{ target[0] }}:{{ target[1] }}{% endif %}{% if not loop.last %},{% endif %}{% endfor %}{% endif %}">
+  <p class="field-feedback" data-target-feedback="ecs" aria-live="polite"></p>
+  <span class="field-help target-help">格式为“地域 ID:安全组 ID”。<a href="https://ecs.console.aliyun.com/securityGroup" target="_blank" rel="noopener noreferrer">查找安全组 ↗</a></span>
+
+  <label>RDS 实例</label>
+  <div class="target-editor" data-target-editor="rds">
+    <div class="target-tags" data-target-tags>
+      {% if account %}{% for target in account.rds_instances %}<span class="target-tag" data-target-value="{{ target }}"><span>{{ target }}</span><a href="https://rdsnext.console.aliyun.com/detail/{{ target }}/basicInfo" target="_blank" rel="noopener noreferrer" title="在阿里云控制台查看">↗</a><button type="button" aria-label="删除 {{ target }}">×</button></span>{% endfor %}{% endif %}
+    </div>
+    <input data-target-input autocomplete="off" placeholder="输入 RDS 实例 ID 后按回车">
+  </div>
+  <input type="hidden" name="rds_instances" data-target-list value="{% if account %}{{ account.rds_instances|join(',') }}{% endif %}">
+  <p class="field-feedback" data-target-feedback="rds" aria-live="polite"></p>
+  <span class="field-help target-help">填写实例 ID，例如 rm-bp123。<a href="https://rdsnext.console.aliyun.com/" target="_blank" rel="noopener noreferrer">查找 RDS 实例 ↗</a></span>
   <div class="actions"><a href="/accounts">取消</a><button type="submit">保存账号</button></div>
 </form>
 {% endblock %}
