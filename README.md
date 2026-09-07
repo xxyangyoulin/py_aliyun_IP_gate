@@ -2,6 +2,8 @@
 
 定时获取本机公网 IPv4，并同步到多个阿里云账号下的 ECS 安全组和 RDS IP 白名单。配置通过本地 Web 管理后台保存到 SQLite，支持附加 IP、地域限制、飞书通知和同步记录。
 
+![Aliyun IP Gate 管理后台](docs/images/dashboard.png)
+
 ## 安装
 
 需要 Python 3.11 或更高版本。
