@@ -205,7 +205,7 @@ def preview_sync(database):
 
 def check_account_connection(database, account_id):
     config = database.load_config()
-    account = next((item for item in config.accounts if item.id == account_id), None)
+    account = database.get_account(account_id)
     if account is None:
         raise RuntimeError("账号不存在")
     if not account.security_groups and not account.rds_instances:

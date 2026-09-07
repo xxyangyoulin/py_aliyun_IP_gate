@@ -111,6 +111,18 @@ class SyncServiceTests(unittest.TestCase):
 
             get_public_ips.assert_not_called()
 
+    def test_disabled_account_is_skipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = self.create_database(directory)
+            account_id = database.list_accounts()[0].id
+            database.set_account_enabled(account_id, False)
+
+            with patch.object(sync_service, "get_public_ips") as get_public_ips:
+                with self.assertRaisesRegex(RuntimeError, "没有配置任何"):
+                    sync_service.sync_once(database)
+
+            get_public_ips.assert_not_called()
+
     def test_notification_failure_does_not_change_sync_result(self):
         with tempfile.TemporaryDirectory() as directory:
             database = self.create_database(

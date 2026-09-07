@@ -181,6 +181,17 @@ class WebTests(unittest.TestCase):
         self.assertEqual(test_response.json(), connection_result)
         check_connection.assert_called_once_with(self.database, account.id)
 
+        toggle_response = self.client.post(
+            f"/accounts/{account.id}/enabled",
+            data={
+                "csrf_token": self.csrf_token("/accounts"),
+                "enabled": "0",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(toggle_response.status_code, 303)
+        self.assertFalse(self.database.get_account(account.id).enabled)
+
     def test_requires_login(self):
         response = self.client.get("/", follow_redirects=False)
 

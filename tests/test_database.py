@@ -41,7 +41,7 @@ class DatabaseTests(unittest.TestCase):
             database.save_settings(
                 Settings(300, "CN", "Guizhou", "token", "sync", "whitelist", "", True)
             )
-            database.save_account(
+            account_id = database.save_account(
                 None,
                 "PRIMARY",
                 "access-key",
@@ -59,6 +59,10 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(config.accounts[0].rds_instances, ("rm-test",))
             self.assertEqual(config.additional_ips, ("203.0.113.10",))
             self.assertEqual(os.stat(database.path).st_mode & 0o777, 0o600)
+
+            self.assertTrue(database.set_account_enabled(account_id, False))
+            self.assertFalse(database.get_account(account_id).enabled)
+            self.assertEqual(database.list_accounts(include_disabled=False), [])
 
     def test_worker_state_and_sync_run_resources(self):
         with tempfile.TemporaryDirectory() as directory:

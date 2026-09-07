@@ -209,7 +209,7 @@ async def reveal_secret(request: Request):
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     state = database.get_runtime_state()
-    accounts = database.list_accounts()
+    accounts = database.list_accounts(include_disabled=False)
     settings = database.get_settings()
     return render(
         request,
@@ -362,6 +362,21 @@ async def delete_account(account_id: int, request: Request):
     await read_form(request)
     database.delete_account(account_id)
     request.session["flash"] = "账号已删除"
+    return RedirectResponse("/accounts", status_code=303)
+
+
+@app.post("/accounts/{account_id}/enabled")
+async def set_account_enabled(account_id: int, request: Request):
+    form = await read_form(request)
+    enabled_value = str(form.get("enabled", ""))
+    if enabled_value not in ("0", "1"):
+        raise HTTPException(status_code=400, detail="账号状态无效")
+    account = database.get_account(account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="账号不存在")
+    enabled = enabled_value == "1"
+    database.set_account_enabled(account_id, enabled)
+    request.session["flash"] = f"账号 {account.name} 已{'启用' if enabled else '停用'}"
     return RedirectResponse("/accounts", status_code=303)
 
 

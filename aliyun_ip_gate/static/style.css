@@ -331,6 +331,9 @@ tbody tr:hover { background: #fafcff; }
 .link { padding: 0; color: #2563eb; background: transparent; box-shadow: none; font-weight: 500; }
 .link:hover { transform: none; box-shadow: none; }
 .link.danger { color: #c73d3d; }
+.link.warning { color: #b36a13; }
+.account-disabled td { color: #98a3b3; background: #fafbfd; }
+.account-disabled td strong { color: #718096; }
 .status { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font-size: 10px; font-weight: 700; }
 .status::before { width: 5px; height: 5px; border-radius: 50%; background: currentColor; content: ""; }
 .status.success { color: #128052; background: #eafaf2; }
@@ -431,7 +434,7 @@ tbody tr:hover { background: #fafcff; }
 .login-card p { margin: 8px 0 25px; color: #8796af; }
 .login-card label { color: #c8d3e4; }
 .login-card input { border-color: rgba(255,255,255,.13); color: white; background: rgba(255,255,255,.06); }
-.login-card button { width: 100%; padding: 12px; }
+.login-card form > button { width: 100%; padding: 12px; }
 
 @media (max-width: 1080px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

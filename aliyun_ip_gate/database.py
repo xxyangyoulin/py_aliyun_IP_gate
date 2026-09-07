@@ -202,6 +202,7 @@ class Database:
                         name=row["name"],
                         access_key_id=row["access_key_id"],
                         access_key_secret=row["access_key_secret"],
+                        enabled=bool(row["enabled"]),
                         security_groups=tuple(
                             (target["region_id"], target["security_group_id"])
                             for target in security_groups
@@ -271,6 +272,14 @@ class Database:
     def delete_account(self, account_id):
         with self.connect() as connection:
             connection.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+
+    def set_account_enabled(self, account_id, enabled):
+        with self.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE accounts SET enabled = ? WHERE id = ?",
+                (int(enabled), account_id),
+            )
+        return bool(cursor.rowcount)
 
     def get_additional_ips(self):
         with self.connect() as connection:

@@ -39,11 +39,12 @@
 <section class="panel">
   {% if accounts %}
   <table>
-    <thead><tr><th>名称</th><th>AccessKey ID</th><th>ECS</th><th>RDS</th><th></th></tr></thead>
+    <thead><tr><th>名称</th><th>状态</th><th>AccessKey ID</th><th>ECS</th><th>RDS</th><th></th></tr></thead>
     <tbody>
       {% for account in accounts %}
-      <tr>
+      <tr class="{% if not account.enabled %}account-disabled{% endif %}">
         <td><strong>{{ account.name }}</strong></td>
+        <td><span class="status {% if account.enabled %}success{% else %}stopped{% endif %}">{% if account.enabled %}已启用{% else %}已停用{% endif %}</span></td>
         <td>{{ mask_secret(account.access_key_id) }}</td>
         <td>{{ account.security_groups|length }}</td>
         <td>{{ account.rds_instances|length }}</td>
@@ -53,6 +54,11 @@
             <button class="link" type="submit">测试连接</button>
           </form>
           <a href="/accounts/{{ account.id }}/edit">编辑</a>
+          <form method="post" action="/accounts/{{ account.id }}/enabled" {% if account.enabled %}data-confirm="停用账号“{{ account.name }}”后，Worker 和同步预览将跳过其全部 ECS、RDS 资源。" data-confirm-title="停用阿里云账号"{% endif %}>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="enabled" value="{% if account.enabled %}0{% else %}1{% endif %}">
+            <button class="link {% if account.enabled %}warning{% endif %}" type="submit">{% if account.enabled %}停用{% else %}启用{% endif %}</button>
+          </form>
           <form method="post" action="/accounts/{{ account.id }}/delete" data-confirm="确认删除账号“{{ account.name }}”及其所有 ECS、RDS 目标？" data-confirm-title="删除阿里云账号">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button class="link danger" type="submit">删除</button>

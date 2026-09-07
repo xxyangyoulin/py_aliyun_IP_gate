@@ -19,6 +19,7 @@ class Account:
     name: str
     access_key_id: str
     access_key_secret: str
+    enabled: bool
     security_groups: tuple
     rds_instances: tuple
 
