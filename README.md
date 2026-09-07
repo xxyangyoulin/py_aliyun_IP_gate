@@ -47,7 +47,7 @@ python main.py --once
 python web.py
 ```
 
-后台仅监听 `127.0.0.1`，端口由 `WEB_PORT` 配置。使用浏览器访问后，输入 `WEB_ACCESS_TOKEN` 进入管理后台。
+后台监听全部本机网络接口，端口由 `WEB_PORT` 配置，可通过本机、局域网或 Tailscale IP 访问。打开管理后台后，输入 `WEB_ACCESS_TOKEN` 验证访问身份。
 
 ## PM2
 
@@ -66,7 +66,7 @@ pm2 restart syncServerIP-web --update-env
 
 ## Tailscale
 
-Web 服务保持监听本机回环地址，通过 Tailscale Serve 提供给 Tailnet：
+如需使用 Tailscale Serve 提供 HTTPS 入口，可转发到本机 Web 服务：
 
 ```bash
 tailscale serve --bg http://127.0.0.1:17321
