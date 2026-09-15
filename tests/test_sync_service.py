@@ -3,7 +3,10 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
+from types import SimpleNamespace
 from unittest.mock import patch
+
+import requests
 
 from aliyun_ip_gate.config import Settings
 from aliyun_ip_gate.database import Database
@@ -122,6 +125,70 @@ class SyncServiceTests(unittest.TestCase):
                     sync_service.sync_once(database)
 
             get_public_ips.assert_not_called()
+
+    def test_location_failure_records_detected_ip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = self.create_database(directory)
+            current = database.get_settings()
+            database.save_settings(
+                Settings(
+                    current.check_interval_seconds,
+                    "CN",
+                    "",
+                    current.ipinfo_token,
+                    current.ecs_rule_description,
+                    current.rds_whitelist_name,
+                    current.feishu_webhook_url,
+                    current.keep_history,
+                )
+            )
+            with patch.object(
+                sync_service,
+                "get_public_ips",
+                return_value=[("198.51.100.11", "US", "California")],
+            ):
+                with self.assertRaisesRegex(RuntimeError, "不符合地域限制"):
+                    sync_service.sync_once(database)
+
+            run = database.list_sync_runs()[0]
+            self.assertFalse(run["success"])
+            self.assertEqual(run["detected_ips"], "198.51.100.11")
+
+    def test_location_lookup_failure_records_detected_ip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = self.create_database(directory)
+            current = database.get_settings()
+            database.save_settings(
+                Settings(
+                    current.check_interval_seconds,
+                    "CN",
+                    "",
+                    current.ipinfo_token,
+                    current.ecs_rule_description,
+                    current.rds_whitelist_name,
+                    current.feishu_webhook_url,
+                    current.keep_history,
+                )
+            )
+
+            def request(url, **kwargs):
+                if "198.51.100.12" in url:
+                    raise requests.ConnectionError("geo unavailable")
+                return SimpleNamespace(
+                    text="198.51.100.12",
+                    raise_for_status=lambda: None,
+                )
+
+            with (
+                patch("aliyun_ip_gate.ip.requests.get", side_effect=request),
+                redirect_stdout(StringIO()),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "无法确认公网 IP"):
+                    sync_service.sync_once(database)
+
+            run = database.list_sync_runs()[0]
+            self.assertFalse(run["success"])
+            self.assertEqual(run["detected_ips"], "198.51.100.12")
 
     def test_notification_failure_does_not_change_sync_result(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -3,7 +3,9 @@ import ipaddress
 import requests
 
 
-def get_public_ips(check_location=True, ipinfo_token=""):
+def get_public_ips(
+    check_location=True, ipinfo_token="", detected_ips_capture=None
+):
     ips = set()
     ip_providers = (
         "https://v4.ident.me",
@@ -30,11 +32,15 @@ def get_public_ips(check_location=True, ipinfo_token=""):
     if not ips:
         raise RuntimeError("所有公网 IPv4 查询接口均不可用")
 
+    detected_ips = sorted(ips)
+    if detected_ips_capture is not None:
+        detected_ips_capture[:] = detected_ips
+
     if not check_location:
-        return [(ip, None, None) for ip in sorted(ips)]
+        return [(ip, None, None) for ip in detected_ips]
 
     locations = []
-    for ip in sorted(ips):
+    for ip in detected_ips:
         geo_providers = (
             f"https://ipinfo.io/{ip}/json",
             f"https://api.ip.sb/geoip/{ip}",

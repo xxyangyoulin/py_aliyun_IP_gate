@@ -52,7 +52,7 @@ def create_rds_client(account):
     return RdsClient(client_config)
 
 
-def resolve_target_ips(config):
+def resolve_target_ips(config, detected_ips_capture=None):
     target_count = sum(
         len(account.security_groups) + len(account.rds_instances)
         for account in config.accounts
@@ -62,7 +62,12 @@ def resolve_target_ips(config):
 
     settings = config.settings
     check_location = bool(settings.allowed_country or settings.allowed_region)
-    locations = get_public_ips(check_location, settings.ipinfo_token)
+    locations = get_public_ips(
+        check_location, settings.ipinfo_token, detected_ips_capture
+    )
+    detected_ips = sorted(ip for ip, _, _ in locations)
+    if detected_ips_capture is not None:
+        detected_ips_capture[:] = detected_ips
     for ip, country, region in locations:
         if not check_location:
             print(f"当前公网 IP: {ip}，未配置地域限制")
@@ -81,7 +86,6 @@ def resolve_target_ips(config):
                 f"{settings.allowed_region or '*'}"
             )
 
-    detected_ips = sorted(ip for ip, _, _ in locations)
     target_ips = sorted(set(detected_ips).union(config.additional_ips))
     return detected_ips, target_ips
 
@@ -242,7 +246,7 @@ def sync_once(database):
         try:
             config = database.load_config()
             settings = config.settings
-            detected_ips, target_ips = resolve_target_ips(config)
+            detected_ips, target_ips = resolve_target_ips(config, detected_ips)
             cached_ips = ",".join(target_ips)
             state = database.get_runtime_state()
             old_ips = state["last_ips"]
